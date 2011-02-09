@@ -28,6 +28,7 @@ describe Lumberjack::MongoDevice do
   it "should use an existing collection" do
     device = Lumberjack::MongoDevice.new(collection)
     device.write(entry_1)
+    device.flush
     collection.count.should == 1
   end
   
@@ -86,6 +87,7 @@ describe Lumberjack::MongoDevice do
     device.write(entry_1)
     device.write(entry_2)
     device.write(entry_3)
+    device.flush
     collection.count.should == 3
     doc = collection.find_one(:message => "message 1")
     doc["time"].should == time_1
@@ -96,9 +98,66 @@ describe Lumberjack::MongoDevice do
     doc["message"].should == entry_1.message
   end
   
-  it "should close a connection" do
+  it "should close and flush a connection" do
     device = Lumberjack::MongoDevice.new(:db => "test", :collection => "log")
+    connection = device.collection.db.connection
+    connection.should_receive(:close)
+    device.should_receive(:flush)
     device.close
+  end
+  
+  context "buffering" do
+    it "should buffer log entries and insert them in batches" do
+      device = Lumberjack::MongoDevice.new(:db => "test", :collection => "log")
+      device.write(entry_1)
+      device.write(entry_2)
+      device.write(entry_3)
+      collection.count.should == 0
+      device.flush
+      collection.count.should == 3
+    end
+  
+    it "should be able to control the buffer size" do
+      device = Lumberjack::MongoDevice.new(:db => "test", :collection => "log")
+      device.buffer_size = 2
+      device.write(entry_1)
+      collection.count.should == 0
+      device.write(entry_2)
+      collection.count.should == 2
+      device.write(entry_3)
+      collection.count.should == 2
+      device.flush
+      collection.count.should == 3
+    end
+  
+    it "should set the buffer size on initialize with options" do
+      device = Lumberjack::MongoDevice.new(:db => "test", :collection => "log", :buffer_size => 2)
+      device.buffer_size = 2
+      device.write(entry_1)
+      collection.count.should == 0
+      device.write(entry_2)
+      collection.count.should == 2
+      device.write(entry_3)
+      collection.count.should == 2
+      device.flush
+      collection.count.should == 3
+    end
+  
+    it "should set the buffer size on initialize with a collection" do
+      device = Lumberjack::MongoDevice.new(collection, :buffer_size => 2)
+      device.buffer_size = 2
+      device.write(entry_1)
+      collection.count.should == 0
+      device.write(entry_2)
+      collection.count.should == 2
+      device.write(entry_3)
+      collection.count.should == 2
+      device.flush
+      collection.count.should == 3
+    end
+    
+    it "should output to standard error if the buffer can't be written'" do
+    end
   end
   
   context "finding" do
@@ -108,6 +167,7 @@ describe Lumberjack::MongoDevice do
       device.write(entry_1)
       device.write(entry_2)
       device.write(entry_3)
+      device.flush
     end
     
     it "should find entries and yield them to a block" do

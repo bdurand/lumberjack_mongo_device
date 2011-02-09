@@ -20,8 +20,13 @@ module Lumberjack
     UNIT_OF_WORK_ID = "unit_of_work_id"
     MESSAGE = "message"
     
+    DEFAULT_BUFFER_SIZE = 50
+    
     # Get the MongoDB collection that is being written to.
     attr_reader :collection
+    
+    # The size of the internal buffer. Log entries are buffered so they can be sent to MongoDB in batches for efficiency.
+    attr_accessor :buffer_size
     
     # Initialize the device by passing in either a Mongo::Collection object or a hash of options
     # to create the collection. Available options are:
@@ -34,11 +39,12 @@ module Lumberjack
     # * <tt>:password</tt> - The password to authenticate with for database connections (optional).
     # * <tt>:max</tt> - If the collection does not aleady exist it will be capped at this number of records.
     # * <tt>:size</tt> - If the collection does not aleady exist it will be capped at this size in bytes.
+    # * <tt>:buffer_size</tt> - The number of entries that will be buffered before they are sent to MongoDB.
     #
     # If the collection does not already exist, it will be created. If either the <tt>:max</tt> or <tt>:size</tt>
     # options are provided, it will be created as a capped collection. Indexes will be created on +unit_of_work_id+
     # and +time+.
-    def initialize(collection_or_options)
+    def initialize(collection_or_options, options = nil)
       if collection_or_options.is_a?(Hash)
         options = collection_or_options.dup
         host = options.delete(:host)
@@ -50,28 +56,68 @@ module Lumberjack
         max = options.delete(:max)
         size = options.delete(:size)
         
+        @buffer_size = options.delete(:buffer_size) || DEFAULT_BUFFER_SIZE
+        
         connection = Mongo::Connection.new(host, port, options)
         db = connection.db(db_name)
         db.authenticate(username, password) if username && password
         if db.collections.collect{|coll| coll.name}.include?(collection.to_s)
           @collection = db.collection(collection)
         else
-          @collection = db.create_collection(collection, :capped => (max || size), :max => max, :size => size)
-          @collection.ensure_index(:time)
-          @collection.ensure_index(:unit_of_work_id)
+          begin
+            @collection = db.create_collection(collection, :capped => (max || size), :max => max, :size => size)
+            @collection.ensure_index(:time)
+            @collection.ensure_index(:unit_of_work_id)
+          rescue Mongo::OperationFailure
+            # Create collection can fail if multiple processes try to create it at once.
+            @collection = db.collection(collection)
+            raise unless @collection
+          end
         end
       else
         @collection = collection_or_options
+        @buffer_size = options[:buffer_size] if options
+        @buffer_size ||= DEFAULT_BUFFER_SIZE
       end
+      
+      @buffer = []
+      @lock = Mutex.new
     end
     
     def write(entry)
-      @collection.insert(:time => entry.time, :severity => entry.severity_label, :progname => entry.progname, :pid => entry.pid, :unit_of_work_id => entry.unit_of_work_id, :message => entry.message)
+      @lock.synchronize do
+        @buffer << entry
+      end
+      flush if @buffer.size >= @buffer_size
+    end
+    
+    def flush
+      docs = []
+      @lock.synchronize do
+        @buffer.each do |entry|
+          docs << {:time => entry.time, :severity => entry.severity_label, :progname => entry.progname, :pid => entry.pid, :unit_of_work_id => entry.unit_of_work_id, :message => entry.message}
+        end
+        begin
+          @collection.insert(docs)
+        rescue => e
+          puts e.inspect
+          puts e.backtrace.join("\n")
+          $stderr.write("#{e.class.name}: #{e.message}#{' at ' + e.backtrace.first if e.backtrace}")
+          @buffer.each do |entry|
+            $stderr.puts(entry.to_s)
+          end
+          $stderr.flush
+        ensure
+          @buffer.clear
+        end
+      end
     end
     
     def close
       flush
-      @collection.db.connection.close
+      @lock.synchronize do
+        @collection.db.connection.close
+      end
     end
     
     # Retrieve Lumberjack::LogEntry objects from the MongoDB collection. If a block is given, it will be yielded to

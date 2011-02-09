@@ -16,5 +16,5 @@ Gem::Specification.new do |s|
   s.extra_rdoc_files = ["README.rdoc"]
   
   s.add_dependency "mongo", ">=1.1.5"
-  s.add_dependency "lumberjack"
+  s.add_dependency "lumberjack", "~>1.0"
 end

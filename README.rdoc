@@ -2,7 +2,7 @@
 
 This gem provides a logging device for the lumberjack gem that will log to a MongoDB collection.
 
-MongoDB can make a excellent destination for log data because it is fast, clients don't need to wait for confirmation that log messages are persisted, and it has a concept of capped collections which are fixed in size and will simply roll over and start writing from the beginning when they are full.
+MongoDB can make a good destination for centralized log data because it is fast, clients don't need to wait for confirmation that log messages are persisted, and it has a concept of capped collections which are fixed in size and will simply roll over and start writing from the beginning when they are full.
 
 == Example Usage
 

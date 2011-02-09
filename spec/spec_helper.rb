@@ -37,5 +37,4 @@ end
 def stop_mongo
   pid = File.read("#{tmp_dir}/mongo.pid").chomp
   `kill -15 #{pid}`
-  #FileUtils.rm_r(tmp_dir) if File.exist?(tmp_dir)
 end
