@@ -108,7 +108,7 @@ describe Lumberjack::MongoDevice do
   
   context "buffering" do
     it "should buffer log entries and insert them in batches" do
-      device = Lumberjack::MongoDevice.new(:db => "test", :collection => "log")
+      device = Lumberjack::MongoDevice.new(:db => "test", :collection => "log", :buffer_size => 32767)
       device.write(entry_1)
       device.write(entry_2)
       device.write(entry_3)

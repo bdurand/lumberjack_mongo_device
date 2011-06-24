@@ -20,13 +20,13 @@ module Lumberjack
     UNIT_OF_WORK_ID = "unit_of_work_id"
     MESSAGE = "message"
     
-    DEFAULT_BUFFER_SIZE = 50
+    DEFAULT_BUFFER_SIZE = 0
     
     # Get the MongoDB collection that is being written to.
     attr_reader :collection
     
     # The size of the internal buffer. Log entries are buffered so they can be sent to MongoDB in batches for efficiency.
-    attr_accessor :buffer_size
+    attr_reader :buffer_size
     
     # Initialize the device by passing in either a Mongo::Collection object or a hash of options
     # to create the collection. Available options are:
@@ -39,7 +39,7 @@ module Lumberjack
     # * <tt>:password</tt> - The password to authenticate with for database connections (optional).
     # * <tt>:max</tt> - If the collection does not aleady exist it will be capped at this number of records.
     # * <tt>:size</tt> - If the collection does not aleady exist it will be capped at this size in bytes.
-    # * <tt>:buffer_size</tt> - The number of entries that will be buffered before they are sent to MongoDB.
+    # * <tt>:buffer_size</tt> - The number of entries that will be buffered before they are sent to MongoDB. Default is not to buffer.
     #
     # If the collection does not already exist, it will be created. If either the <tt>:max</tt> or <tt>:size</tt>
     # options are provided, it will be created as a capped collection. Indexes will be created on +unit_of_work_id+
@@ -82,6 +82,13 @@ module Lumberjack
       
       @buffer = []
       @lock = Mutex.new
+    end
+    
+    # Set the buffer size in bytes. The device will only be physically written to when the buffer size
+    # is exceeded.
+    def buffer_size=(value)
+      @buffer_size = value
+      flush
     end
     
     def write(entry)
