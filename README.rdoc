@@ -1,5 +1,9 @@
 = Lumberjack Mongo Device
 
+
+== This gem is no longer being maintained. It only works with lumberjack 1.x and mongo 1.x gems
+
+
 This gem provides a logging device for the lumberjack gem that will log to a MongoDB collection.
 
 MongoDB can make a good destination for centralized log data because it is fast, clients don't need to wait for confirmation that log messages are persisted, and it has a concept of capped collections which are fixed in size and will simply roll over and start writing from the beginning when they are full.
@@ -7,7 +11,7 @@ MongoDB can make a good destination for centralized log data because it is fast,
 == Example Usage
 
   require 'lumberjack_mongo_device'
-  
+
   # Connect to mongodb on localhost:27017 and use the "log" collection in the "app" database.
   # The log collection will be created as a capped collection with a maximum size of 1GB.
   device = Lumberjack::MongoDevice.new(:db => "app", :collection => "log", :size => 1024 ** 3)
